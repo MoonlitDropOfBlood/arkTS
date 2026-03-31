@@ -1,4 +1,3 @@
-/* eslint-disable node/prefer-global/process */
 import type { ETSPluginOptions, TypescriptLanguageFeatures } from '@arkts/shared'
 import type { LabsInfo } from '@volar/vscode'
 import type { LanguageClient, LanguageClientOptions } from '@volar/vscode/node'
@@ -130,7 +129,6 @@ export abstract class LanguageServerContext extends AbstractWatcher implements I
     const typescriptPluginConfig: ETSPluginOptions = {
       lspOptions: clientOptions.initializationOptions,
     }
-    process.env.__etsTypescriptPluginFeature = JSON.stringify(typescriptPluginConfig)
     const typescriptLanguageFeatures = vscode.extensions.getExtension<TypescriptLanguageFeatures>('vscode.typescript-language-features')
     if (typescriptLanguageFeatures?.isActive) {
       vscode.commands.executeCommand('typescript.restartTsServer')

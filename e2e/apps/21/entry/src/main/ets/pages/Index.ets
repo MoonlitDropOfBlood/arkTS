@@ -16,6 +16,7 @@ struct Index {
         .onClick(() => {
           this.message = this.message === "Hello World" ? "Welcome" : "Hello World";
         })
+        Image($r("app.media.startIcon"))
     }
     .height("100%")
     .width("100%")

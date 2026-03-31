@@ -96,6 +96,27 @@ export namespace ResourceProvider {
         ?.findByUri(uri.toString())
     }
 
+    /**
+     * Find all references from the 'default' product of the Module that the given URI belongs to.
+     */
+    findAllReferencesFromModule(uri: string | URI): (import('../interfaces/element-json-file-reference').ElementJsonFileReference | MediaReference | import('../interfaces/profile-reference').ProfileReference)[] {
+      // Navigate: ProjectDetectorManager -> ProjectDetector -> Project -> Module
+      const projectDetector = this.projectDetectorManager.findByUri(uri.toString())
+      const project = projectDetector?.findByUri(uri.toString())
+      const module = project?.findByUri(uri.toString())
+
+      if (!module) return []
+
+      // Find the 'default' product
+      const defaultProduct = module.findAll().find(product =>
+        product.getUnderlyingProduct().getName() === 'default',
+      )
+
+      if (!defaultProduct) return []
+
+      return defaultProduct.findReference()
+    }
+
     getReadonlySourceFiles(): readonly ets.SourceFile[] {
       return this.contextUtil.getLanguageService()?.getProgram()?.getSourceFiles() ?? []
     }
@@ -304,10 +325,7 @@ export namespace ResourceProvider {
       }
       else if (scope === 'app') {
         const definitions: LocationLink[] = []
-        const product = this.findProductByUri(decodedUri)
-        if (!product) return null
-
-        const references = product.findReference()
+        const references = this.findAllReferencesFromModule(decodedUri)
         if (!references.length) return null
         const originSelectionRange = Reference.toRange(currentCallExpression.arguments[0], document, true)
 
@@ -461,8 +479,6 @@ export namespace ResourceProvider {
       if (!firstArgumentText) return []
       const sysResource = this.config.getSysResource()
       const sysEtsFormats = sysResource ? SysResource.toEtsFormat(sysResource) : []
-      const product = this.findProductByUri(decodedUri)
-      if (!product) return []
 
       const items: CompletionItem[] = []
 
@@ -480,7 +496,7 @@ export namespace ResourceProvider {
       }
 
       if (!firstArgumentText.startsWith('sys')) {
-        const uniqueEtsFormats = [...new Set(product.findReference().map(reference => reference.toEtsFormat()))]
+        const uniqueEtsFormats = [...new Set(this.findAllReferencesFromModule(decodedUri).map(reference => reference.toEtsFormat()))]
         for (const etsFormat of uniqueEtsFormats) {
           const split = etsFormat.split(firstArgumentText)
           if (split.length < 2) continue
@@ -562,15 +578,13 @@ export namespace ResourceProvider {
           continue
         }
         else if (resourceValue.startsWith('app')) {
-          const product = this.findProductByUri(decodedUri)
-          if (!product) continue
-          const references = product.findReference()
+          const references = this.findAllReferencesFromModule(decodedUri)
           if (!references.length) continue
           const reference = references.find(reference => reference.toEtsFormat() === resourceValue)
           if (reference) continue
 
           diagnostics.push({
-            message: `Resource ${resourceValue} not found in current scope. Indexed application resources: ${product.findAll().map(resource => resource.getUnderlyingResource().getUri()).join(', ')}`,
+            message: `Resource ${resourceValue} not found in current scope.`,
             range: Reference.toRange(resourceCallExpression.arguments[0], sourceFile, true),
             severity: DiagnosticSeverity.Error,
             code: 'APP_RESOURCE_NOT_FOUND',
@@ -780,10 +794,9 @@ export namespace ResourceProvider {
       if (!firstArgumentText.startsWith('app.media.')) return null
       const decodedUri = this.contextUtil.decodeTextDocumentUri(document)
       if (!decodedUri) return null
-      const product = this.findProductByUri(decodedUri)
-      const references = product?.findReference()
+      const references = this.findAllReferencesFromModule(decodedUri)
         .filter(reference => MediaReference.is(reference))
-        .filter(reference => reference.toEtsFormat() === firstArgumentText) ?? []
+        .filter(reference => reference.toEtsFormat() === firstArgumentText)
       if (!references.length) return null
       const value = references.map(reference => this.buildDollarResourceHoverText(reference)).join('---\n')
       return {
