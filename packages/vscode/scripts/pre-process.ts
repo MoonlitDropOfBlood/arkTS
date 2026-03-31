@@ -25,6 +25,26 @@ export const PLATFORMS = {
  *
  * So the pnpm must disable the symlink feature.
  */
+function getPlatformSpecificPackage(basePackage: string, os?: string, arch?: string, libc?: string): string | null {
+  if (!os || !arch) return null
+
+  const libcSuffix = libc === 'musl' ? 'musl' : 'gnu'
+
+  // Map OS to package naming
+  // const osName = os
+  if (os === 'win32') {
+    return `${basePackage}-win32-${arch}-msvc`
+  }
+  else if (os === 'darwin') {
+    return `${basePackage}-darwin-${arch}`
+  }
+  else if (os === 'linux') {
+    return `${basePackage}-linux-${arch}-${libcSuffix}`
+  }
+
+  return null
+}
+
 async function main() {
   globalLogger.info('Cleaning node_modules...')
   fs.rmSync(path.resolve('node_modules'), { recursive: true, force: true })
@@ -37,7 +57,25 @@ async function main() {
     return identifier
   }).join(' ')
   const ohosRsOxkIdentifiers = collectIdentifiers(resolveDependenciesByIdentifier('@ohos-rs/oxk')).join(' ')
-  const installCommand = `npm install ${projectDetectorIdentifiers} ${ohosRsOxkIdentifiers} --verbose --no-save ${process.env.OS ? ` --os=${process.env.OS}` : ''}${process.env.ARCH ? ` --arch=${process.env.ARCH}` : ''}${process.env.LIBC ? ` --libc=${process.env.LIBC}` : ''}${process.env.CPU ? ` --cpu=${process.env.CPU}` : ''}`
+
+  // Add platform-specific packages (without @next tag)
+  let platformSpecificPackages = ''
+  const detectorPlatformPkg = getPlatformSpecificPackage('@arkts/project-detector', process.env.OS, process.env.ARCH, process.env.LIBC)
+  const oxkPlatformPkg = getPlatformSpecificPackage('@ohos-rs/oxk', process.env.OS, process.env.ARCH, process.env.LIBC)
+
+  if (detectorPlatformPkg) {
+    platformSpecificPackages += ` ${detectorPlatformPkg}`
+    globalLogger.info(`Adding platform-specific package: ${detectorPlatformPkg}`)
+  }
+  if (oxkPlatformPkg) {
+    platformSpecificPackages += ` ${oxkPlatformPkg}`
+    globalLogger.info(`Adding platform-specific package: ${oxkPlatformPkg}`)
+  }
+
+  // Add @napi-rs/wasm-runtime dependencies
+  const wasmRuntimeDeps = '@emnapi/core@^1.7.1 @emnapi/runtime@^1.7.1 @tybys/wasm-util@^0.10.1'
+
+  const installCommand = `npm install ${projectDetectorIdentifiers} ${ohosRsOxkIdentifiers}${platformSpecificPackages} ${wasmRuntimeDeps} --verbose --no-save --legacy-peer-deps`
   globalLogger.info(installCommand)
   execSync(installCommand, { stdio: 'inherit' })
   globalLogger.info('Install done, start copying dependencies...')
